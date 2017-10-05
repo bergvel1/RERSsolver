@@ -3,7 +3,7 @@ SOURCES = abs_syn.ml parse.mly tokens.ml lex.mll eval_exp.ml graph.ml solverintf
 EXEC = main
 
 CAMLC = ocamlfind ocamlc -cc=gcc-7 -I +alt-ergo-zero unix.cma nums.cma aez.cma -package ocamlyices -linkpkg
-CAMLOPT = ocamlopt
+CAMLOPT = ocamlfind ocamlopt -cc=gcc-7 -I +alt-ergo-zero unix.cmxa aez.cmxa -package ocamlyices -linkpkg
 CAMLDEP = ocamldep
 CAMLLEX = ocamllex
 CAMLYACC = ocamlyacc
@@ -16,15 +16,15 @@ SMLIY = $(SOURCES:.mly=.ml)
 SMLIYL = $(SMLIY:.mll=.ml)
 SMLYL = $(filter %.ml,$(SMLIYL))
 OBJS = $(SMLYL:.ml=.cmo)
-OPTOBJS = $(OBJS:.cmx=.cmx)
+OPTOBJS = $(OBJS:.cmo=.cmx)
 
 $(EXEC): $(OBJS) 
-	$(CAMLC) $(CUSTOM) -o $(EXEC) $(LIBS) $(OBJS)
+	$(CAMLOPT) $(CUSTOM) -o $(EXEC) $(LIBS) $(OPTOBJS)
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx .mll .mly 
 
 .ml.cmo:
-	$(CAMLC) -c $<
+	$(CAMLOPT) -c $<
 
 .mli.cmi:
 	$(CAMLC) -c $<
@@ -62,6 +62,7 @@ $(EXEC): $(OBJS)
 
 clean::
 	rm -f *.cm[iox] *~ .*~ #*#
+	rm -f *.o
 	rm -f $(EXEC)
 	rm -f $(EXEC).opt
 
