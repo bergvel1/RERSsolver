@@ -63,13 +63,13 @@ module Make_AEZ() : SolverInterface =
 		)
 
 		let reset () = reset_formula_count(); InternalSolver.clear()
-		let assume p = print_string ("Assume: " ^ (string_of_pred p) ^ "... ");
+		let assume p = (*print_string ("Assume: " ^ (string_of_pred p) ^ "... ");*)
 					   let n = get_formula_count() in 
 					   let f = formula_of_pred p in 
 					   	try
 					   	 InternalSolver.assume ~id:n f
-					   	with Unsat _ -> print_string "Unsat (assume) \n"
-		let check () = try (InternalSolver.check(); print_string "Sat!\n") with Unsat _ -> print_string "Unsat (check)\n"
+					   	with Unsat _ -> () (*print_string "Unsat (assume) \n"*)
+		let check () = try (InternalSolver.check(); print_string "Sat!\n") with Unsat _ -> () (*print_string "Unsat (check)\n"*)
 		let print_model () = print_string "AEZ cannot print models.\n"
 		let try_assume p = true
 	end

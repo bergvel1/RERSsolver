@@ -6,8 +6,8 @@ open Graph
 open Eval_exp
 open Solverintf
 
-(*module Solver = Make_AEZ()*)
-module Solver = Make_Yices()
+module Solver = Make_AEZ()
+(*module Solver = Make_Yices()*)
 
 type task = 
 	{	task_num:int;
@@ -37,7 +37,7 @@ if (Stack.is_empty task_stack) then print_string "no more tasks\n" else
 					{task_num = if (e = (List.hd (List.rev in_edges))) then curr_task.task_num else get_task_count();
 					 curr_node_idx = n; 
 					 depth = curr_task.depth;
-					 condition = shake_eval_pred (pred_subst var asg_value curr_task.condition);
+					 condition = (*shake_eval_pred*) (pred_subst var asg_value curr_task.condition);
 					 input_count = curr_task.input_count} task_stack;
 				| Input_node _ -> Stack.push
 					{task_num = if (e = (List.hd (List.rev in_edges))) then curr_task.task_num else get_task_count();
@@ -56,7 +56,7 @@ if (Stack.is_empty task_stack) then print_string "no more tasks\n" else
 					{task_num = if (e = (List.hd (List.rev in_edges))) then curr_task.task_num else get_task_count();
 					 curr_node_idx = n; 
 					 depth = curr_task.depth;
-					 condition = shake_eval_pred (And ((Exp_pred cond),curr_task.condition));
+					 condition = (*shake_eval_pred*) (And ((Exp_pred cond),curr_task.condition));
 					 input_count = curr_task.input_count} task_stack;
 				| _ -> failwith "malformed graph")
 			| (n,No) -> (match (Array.get graph n) with
@@ -64,7 +64,7 @@ if (Stack.is_empty task_stack) then print_string "no more tasks\n" else
 					{task_num = if (e = (List.hd (List.rev in_edges))) then curr_task.task_num else get_task_count();
 					 curr_node_idx = n; 
 					 depth = curr_task.depth;
-					 condition = shake_eval_pred (And ((Not (Exp_pred cond)),curr_task.condition));
+					 condition = (*shake_eval_pred*) (And ((Not (Exp_pred cond)),curr_task.condition));
 					 input_count = curr_task.input_count} task_stack;
 				| _ -> failwith "malformed graph")
 			| (n,_) -> Stack.push 
