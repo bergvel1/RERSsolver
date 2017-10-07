@@ -1,4 +1,4 @@
-SOURCES = abs_syn.ml parse.mly tokens.ml lex.mll eval_exp.ml graph.ml solverintf.ml bfs_smt.ml dfs_smt.ml bfs_subst.ml dfs_subst.ml main.ml
+SOURCES = abs_syn.ml parse.mly tokens.ml lex.mll eval_exp.ml graph.ml solverintf.ml bfs_smt.ml dfs_smt.ml bfs_subst.ml dfs_subst.ml full_smt.ml main.ml
 
 EXEC = main
 

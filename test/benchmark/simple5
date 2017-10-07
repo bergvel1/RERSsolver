@@ -11,16 +11,16 @@ Substitution DFS: 0.005902s
 -------------------------------------------
 Compiled with ocamlopt 4.04.0
 Searching from: Error 1
-Depth: 5
+Depth: 7
 
 TIME BENCHMARKS (measured with Sys.time())
 OCamlyices (partial SMT) BFS: 18.122055s
 OCamlyices (partial SMT) BFS (no eval_exp simplification): 13.370915s
 Alt-Ergo Zero (partial SMT) BFS: 17.484332s
-Alt-Ergo Zero (partial SMT) BFS (no eval_exp simplification): 694.127060s (what?!)
+Alt-Ergo Zero (partial SMT) BFS (no eval_exp simplification): 694.127060s (?!)
 Substitution BFS: 0.080741s
 OCamlyices (partial SMT) DFS: 5.911967s
 OCamlyices (partial SMT) DFS (no eval_exp simplification): 7.119260s
 Alt-Ergo Zero (partial SMT) DFS: 5.838687s
-Alt-Ergo Zero (partial SMT) DFS (no eval_exp simplification):
+Alt-Ergo Zero (partial SMT) DFS (no eval_exp simplification): 425.792768s (?!)
 Substitution DFS: 0.034350s
