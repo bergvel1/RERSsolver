@@ -4,7 +4,7 @@ open Dfs_smt
 open Bfs_subst
 open Dfs_subst
 
-open Full_smt
+(*open Full_smt*)
 
 let time f x =
     let t = Sys.time() in
@@ -20,12 +20,14 @@ let terminal_node_idxs = get_terminal_node_idx_list graph in
 let input_alph = get_input_alph graph in
 Printf.printf "Enter a search depth: \n";
 let depth = int_of_string (read_line()) in
-Printf.printf "Running (full) SMT search... \n";
-time (init_smt_search graph depth) (List.hd terminal_node_idxs);
+(*Printf.printf "Running (full) SMT search... \n";
+time (init_smt_search graph depth) (List.hd terminal_node_idxs);*)
 (*init_smt_reverse_bfs graph depth (List.hd terminal_node_idxs);*)
-Printf.printf "Running substitution search... \n";
+Printf.printf "Running substitution DFS search... \n";
 time (init_subst_reverse_dfs graph input_alph depth) (List.hd terminal_node_idxs);
 (*init_subst_reverse_bfs graph input_alph depth (List.hd terminal_node_idxs);*)
+Printf.printf "Running substitution BFS search... \n";
+time (init_subst_reverse_bfs graph input_alph depth) (List.hd terminal_node_idxs);
 Printf.printf "Exiting... \n";
 exit 0
 (*mainloop ()*)
