@@ -6,8 +6,8 @@ open Graph
 open Eval_exp
 open Solverintf
 
-module Solver = Make_AEZ()
-(*module Solver = Make_Yices()*)
+(*module Solver = Make_AEZ()*)
+module Solver = Make_Yices()
 
 type task = 
 	{	task_num:int;

@@ -102,7 +102,7 @@ let rec pred_subst subvar subexps p =
 
 let try_pred pred_exp t = 
 let n = get_formula_count() in
-print_string ("Task " ^ (string_of_int t) ^ " Formula " ^ (string_of_int n) ^ ": " ^ (string_of_pred pred_exp) ^ "\n");
+(*print_string ("Task " ^ (string_of_int t) ^ " Formula " ^ (string_of_int n) ^ ": " ^ (string_of_pred pred_exp) ^ "\n");*)
 let f = (formula_of_pred pred_exp) in
 	assert_simple !glbl_context f;
 	(inconsistent !glbl_context)
@@ -143,111 +143,140 @@ let rec phi_subst_exp var_env exp = (match exp with
 					   	 (var_env''',TernExp (c',e1',e2'))
 | _ -> failwith ("unexpected input (phi_subst_exp)" ^ (string_of_exp exp)))
 
-let rec smt_reverse_search graph  task_stack =
+let revert_solver_state curr_rollback_count task_stack =
+if (not (Stack.is_empty task_stack)) 
+	then 
+		(for i = (Stack.top task_stack).rollback to (curr_rollback_count-1) do 
+				(pop !glbl_context)
+		done)
+
+let rec smt_reverse_search graph task_stack =
 if (Stack.is_empty task_stack) then (print_string "no more tasks\n"; []) else
 	(let curr_task = Stack.pop task_stack in
-	print_string ("Now working on task " ^ (string_of_int curr_task.task_num) ^ " at node " ^ (string_of_int curr_task.curr_node_idx) ^ "\n");
-	if (curr_task.depth > 0) then
-		(let curr_node = (Array.get graph curr_task.curr_node_idx) in
-		(match (get_in_nodes curr_node) with
-		  [] -> () (* Run sat check and possibly model-finding *); smt_reverse_search graph task_stack
-		| in_edges -> (* handle placeholder_pred here? *)
-			let _ = List.map (fun e -> (match e with
-			  (n,Seq) -> (match (Array.get graph n) with
-			  	  Assign_node {var;asg_value;node_num;out_node;in_nodes} -> 
-			  	     let lhs = exp_subst (BasicVar "input") [VarExp (BasicVar ("input"^(string_of_int curr_task.input_count)))] (VarExp var) in
-			  	     let rhs = exp_subst (BasicVar "input") [VarExp (BasicVar ("input"^(string_of_int curr_task.input_count)))] (List.hd asg_value) in
-			  	     let (var_env',_) = phi curr_task.var_env lhs in (* this could be done better *)
-			  	     let (var_env'',rhs') = phi_subst_exp var_env' rhs in
-			  	     let lhs' = snd (phi_subst_exp curr_task.var_env lhs) in
-			  	     let p = Exp_pred (BinOpAppExp (EqOp,lhs',rhs')) in
-			  	     	(if (e = (List.hd (List.rev in_edges))) then 
-			  	     		  	(let t = curr_task.task_num in
-			  	     		  	let inconsistent = try_pred p t in
-			  	     		  		(match inconsistent with
-			  	     		  			  true -> print_string ("\tTask " ^ (string_of_int t) ^ " unsat by Formula: " ^ (string_of_int (see_formula_count())) ^ "\n");
-			  	     		  			  		for i = (Stack.top task_stack).rollback to curr_task.rollback do (* here be off-by-one-errors *)
-			  	     		  			  			(pop !glbl_context)
-			  	     		  			  		done; (* revert back to context of next waiting task *) (* handle placeholder pred here? *)
-			  	     		  			| false -> push !glbl_context; 
-			  	     		  				(Stack.push 
-												{task_num = t; curr_node_idx = n; depth = curr_task.depth;
-												 input_count = curr_task.input_count; placeholder_pred = True; 
-												 rollback = curr_task.rollback+1; var_env = var_env''} task_stack;)))
-			  	     		else 
-			  	     			(let t = get_task_count() in (Stack.push 
-									{task_num = t; curr_node_idx = n; depth = curr_task.depth;
-									 input_count = curr_task.input_count; placeholder_pred = p; rollback = curr_task.rollback; 
-									 var_env = var_env''} task_stack;)))
-				| Input_node _ -> Stack.push
-					{task_num = if (e = (List.hd (List.rev in_edges))) then (curr_task.task_num) else (get_task_count());
-					 curr_node_idx = n; depth = curr_task.depth-1;
-					 input_count = curr_task.input_count+1; placeholder_pred = True; rollback = curr_task.rollback;
-					 var_env = curr_task.var_env} task_stack;
-				| _ -> Stack.push 
-					{task_num = if (e = (List.hd (List.rev in_edges))) then (curr_task.task_num) else (get_task_count());
-					 curr_node_idx = n; depth = curr_task.depth;
-					 input_count = curr_task.input_count; placeholder_pred = True; rollback = curr_task.rollback;
-					 var_env = curr_task.var_env} task_stack;)
-			| (n,Yes) -> (match (Array.get graph n) with
-				  Cond_node {cond;node_num;then_node;else_node;in_nodes} -> 
-				     let cond' = exp_subst (BasicVar "input") [VarExp (BasicVar ("input"^(string_of_int curr_task.input_count)))] cond in
-			  	     let (var_env',p) = (let phi_subst = (phi_subst_exp curr_task.var_env cond') in (fst phi_subst, Exp_pred (snd phi_subst))) in
-				  	 	(if (e = (List.hd (List.rev in_edges))) then 
-			  	     		  	(let t = curr_task.task_num in
-			  	     		  	let inconsistent = try_pred p t in
-			  	     		  		(match inconsistent with
-			  	     		  			  true -> print_string ("\tTask " ^ (string_of_int t) ^ " unsat by Formula: " ^ (string_of_int (see_formula_count())) ^ "\n");
-			  	     		  			  		for i = (Stack.top task_stack).rollback to curr_task.rollback do (* here be off-by-one-errors *)
-			  	     		  			  			(pop !glbl_context)
-			  	     		  			  		done; (* revert back to context of next waiting task *) (* handle placeholder pred here? *)
-			  	     		  			| false -> push !glbl_context; 
-			  	     		  				(Stack.push 
-												{task_num = t; curr_node_idx = n; depth = curr_task.depth;
-												 input_count = curr_task.input_count; placeholder_pred = True; 
-												 rollback = curr_task.rollback+1; var_env = var_env'} task_stack;)))
-			  	     		else 
-			  	     			(let t = get_task_count() in (Stack.push 
-									{task_num = t; curr_node_idx = n; depth = curr_task.depth;
-									 input_count = curr_task.input_count; placeholder_pred = p; rollback = curr_task.rollback; 
-									 var_env = var_env'} task_stack;)))
-				| _ -> failwith "malformed graph")
-			| (n,No) -> (match (Array.get graph n) with
-				  Cond_node {cond;node_num;then_node;else_node;in_nodes} -> 
-				     let cond' = exp_subst (BasicVar "input") [VarExp (BasicVar ("input"^(string_of_int curr_task.input_count)))] cond in
-				     let (var_env',p) = (let phi_subst = (phi_subst_exp curr_task.var_env cond') in (fst phi_subst, Not (Exp_pred (snd phi_subst)))) in
-				  	 	(if (e = (List.hd (List.rev in_edges))) then 
-			  	     		  	(let t = curr_task.task_num in
-			  	     		  	let inconsistent = try_pred p t in
-			  	     		  		(match inconsistent with
-			  	     		  			  true -> print_string ("\tTask " ^ (string_of_int t) ^ " unsat by Formula: " ^ (string_of_int (see_formula_count())) ^ "\n");
-			  	     		  			  		for i = (Stack.top task_stack).rollback to curr_task.rollback do (* here be off-by-one-errors *)
-			  	     		  			  			(pop !glbl_context)
-			  	     		  			  		done; (* revert back to context of next waiting task *) (* handle placeholder pred here? *)
-			  	     		  			| false -> push !glbl_context; 
-			  	     		  				(Stack.push 
-												{task_num = t; curr_node_idx = n; depth = curr_task.depth;
-												 input_count = curr_task.input_count; placeholder_pred = True; 
-												 rollback = curr_task.rollback+1; var_env = var_env'} task_stack;)))
-			  	     		else 
-			  	     			(let t = get_task_count() in (Stack.push 
-									{task_num = t; curr_node_idx = n; depth = curr_task.depth;
-									 input_count = curr_task.input_count; placeholder_pred = p; rollback = curr_task.rollback; 
-									 var_env = var_env'} task_stack;)))
-				| _ -> failwith "malformed graph")
-			| (n,_) -> Stack.push
-				  	  	{task_num = if (e = (List.hd (List.rev in_edges))) then (curr_task.task_num) else (get_task_count());
-				  	  	 curr_node_idx = n; depth = curr_task.depth; input_count = curr_task.input_count;
-				  	  	 placeholder_pred = True; rollback = curr_task.rollback; var_env = curr_task.var_env} 
-				  	  	 task_stack;)) in_edges in smt_reverse_search graph task_stack))
-	else (print_string ("Depth limit reached  " ^ (string_of_int curr_task.task_num) ^ "\n");
-		 smt_reverse_search graph  task_stack)) 
+	if (curr_task.depth > -1) then
+		(match curr_task.placeholder_pred with
+			  True -> (*print_string ("Now working on task " ^ (string_of_int curr_task.task_num) ^ " at node " ^ (string_of_int curr_task.curr_node_idx) ^ "\n");*)
+			  	(let curr_node = (Array.get graph curr_task.curr_node_idx) in
+				(match (get_in_nodes curr_node) with
+				  [] -> (*print_string "\t\t Found valid path to start! \n";*)
+				  		(match (check !glbl_context) with
+				  			  True -> display_model (get_model !glbl_context)
+				  			| _ -> failwith "Bad sat check (this should not happen!)"); 
+					  	revert_solver_state curr_task.rollback task_stack;
+				  		smt_reverse_search graph task_stack
+				| in_edges -> 
+					let _ = List.map (fun e -> (match e with
+					  (n,Seq) -> (match (Array.get graph n) with
+					  	  Assign_node {var;asg_value;node_num;out_node;in_nodes} -> 
+					  	     let lhs = exp_subst (BasicVar "input") [VarExp (BasicVar ("input"^(string_of_int curr_task.input_count)))] (VarExp var) in
+					  	     let rhs = exp_subst (BasicVar "input") [VarExp (BasicVar ("input"^(string_of_int curr_task.input_count)))] (List.hd asg_value) in
+					  	     let (var_env',_) = phi curr_task.var_env lhs in (* this could be done better *)
+					  	     let (var_env'',rhs') = phi_subst_exp var_env' rhs in
+					  	     let lhs' = snd (phi_subst_exp curr_task.var_env lhs) in
+					  	     let p = Exp_pred (BinOpAppExp (EqOp,lhs',rhs')) in
+					  	     	(if (e = (List.hd (List.rev in_edges))) then 
+					  	     		  	(let t = curr_task.task_num in
+					  	     		  	push !glbl_context; 
+					  	     		  	let inconsistent = try_pred p t in
+					  	     		  		(match inconsistent with
+					  	     		  			  true -> (* print_string ("\tTask " ^ (string_of_int t) ^ " unsat by Formula: " ^ (string_of_int (see_formula_count())) ^ "\n"); *)
+							  	     		  			revert_solver_state curr_task.rollback task_stack;
+							  	     		  			pop !glbl_context
+					  	     		  			| false -> 
+					  	     		  				(Stack.push 
+														{task_num = t; curr_node_idx = n; depth = curr_task.depth;
+														 input_count = curr_task.input_count; placeholder_pred = True; 
+														 rollback = curr_task.rollback+1; var_env = var_env''} task_stack;)))
+					  	     		else 
+					  	     			(let t = get_task_count() in (Stack.push 
+											{task_num = t; curr_node_idx = n; depth = curr_task.depth;
+											 input_count = curr_task.input_count; placeholder_pred = p; rollback = curr_task.rollback; 
+											 var_env = var_env''} task_stack;)))
+						| Input_node _ -> Stack.push
+							{task_num = if (e = (List.hd (List.rev in_edges))) then (curr_task.task_num) else (get_task_count());
+							 curr_node_idx = n; depth = curr_task.depth-1;
+							 input_count = curr_task.input_count+1; placeholder_pred = True; rollback = curr_task.rollback;
+							 var_env = curr_task.var_env} task_stack;
+						| _ -> Stack.push 
+							{task_num = if (e = (List.hd (List.rev in_edges))) then (curr_task.task_num) else (get_task_count());
+							 curr_node_idx = n; depth = curr_task.depth;
+							 input_count = curr_task.input_count; placeholder_pred = True; rollback = curr_task.rollback;
+							 var_env = curr_task.var_env} task_stack;)
+					| (n,Yes) -> (match (Array.get graph n) with
+						  Cond_node {cond;node_num;then_node;else_node;in_nodes} -> 
+						     let cond' = exp_subst (BasicVar "input") [VarExp (BasicVar ("input"^(string_of_int curr_task.input_count)))] cond in
+					  	     let (var_env',p) = (let phi_subst = (phi_subst_exp curr_task.var_env cond') in (fst phi_subst, Exp_pred (snd phi_subst))) in
+						  	 	(if (e = (List.hd (List.rev in_edges))) then 
+					  	     		  	(let t = curr_task.task_num in
+					  	     		  	push !glbl_context;
+					  	     		  	let inconsistent = try_pred p t in
+					  	     		  		(match inconsistent with
+					  	     		  			  true -> (*print_string ("\tTask " ^ (string_of_int t) ^ " unsat by Formula: " ^ (string_of_int (see_formula_count())) ^ "\n");*)
+							  	     		  			revert_solver_state curr_task.rollback task_stack;
+							  	     		  			pop !glbl_context
+					  	     		  			| false -> 
+					  	     		  				(Stack.push 
+														{task_num = t; curr_node_idx = n; depth = curr_task.depth;
+														 input_count = curr_task.input_count; placeholder_pred = True; 
+														 rollback = curr_task.rollback+1; var_env = var_env'} task_stack;)))
+					  	     		else 
+					  	     			(let t = get_task_count() in (Stack.push 
+											{task_num = t; curr_node_idx = n; depth = curr_task.depth;
+											 input_count = curr_task.input_count; placeholder_pred = p; rollback = curr_task.rollback; 
+											 var_env = var_env'} task_stack;)))
+						| _ -> failwith "malformed graph")
+					| (n,No) -> (match (Array.get graph n) with
+						  Cond_node {cond;node_num;then_node;else_node;in_nodes} -> 
+						     let cond' = exp_subst (BasicVar "input") [VarExp (BasicVar ("input"^(string_of_int curr_task.input_count)))] cond in
+						     let (var_env',p) = (let phi_subst = (phi_subst_exp curr_task.var_env cond') in (fst phi_subst, Not (Exp_pred (snd phi_subst)))) in
+						  	 	(if (e = (List.hd (List.rev in_edges))) then 
+					  	     		  	(let t = curr_task.task_num in
+					  	     		  	push !glbl_context;
+					  	     		  	let inconsistent = try_pred p t in
+					  	     		  		(match inconsistent with
+					  	     		  			  true -> (* print_string ("\tTask " ^ (string_of_int t) ^ " unsat by Formula: " ^ (string_of_int (see_formula_count())) ^ "\n");*)
+							  	     		  			revert_solver_state curr_task.rollback task_stack;
+							  	     		  			pop !glbl_context
+					  	     		  			| false ->
+					  	     		  				(Stack.push 
+														{task_num = t; curr_node_idx = n; depth = curr_task.depth;
+														 input_count = curr_task.input_count; placeholder_pred = True; 
+														 rollback = curr_task.rollback+1; var_env = var_env'} task_stack;)))
+					  	     		else 
+					  	     			(let t = get_task_count() in (Stack.push 
+											{task_num = t; curr_node_idx = n; depth = curr_task.depth;
+											 input_count = curr_task.input_count; placeholder_pred = p; rollback = curr_task.rollback; 
+											 var_env = var_env'} task_stack;)))
+						| _ -> failwith "malformed graph")
+					| (n,_) -> Stack.push
+						  	  	{task_num = if (e = (List.hd (List.rev in_edges))) then (curr_task.task_num) else (get_task_count());
+						  	  	 curr_node_idx = n; depth = curr_task.depth; input_count = curr_task.input_count;
+						  	  	 placeholder_pred = True; rollback = curr_task.rollback; var_env = curr_task.var_env} 
+						  	  	 task_stack;)) in_edges in smt_reverse_search graph task_stack))
+			| _ -> (*print_string ("Checking placeholder and resuming task " ^ (string_of_int curr_task.task_num) ^ " at node " ^ (string_of_int curr_task.curr_node_idx) ^ "\n"); *)
+					(let t = curr_task.task_num in
+					push !glbl_context;
+  	     		  	let inconsistent = try_pred curr_task.placeholder_pred t in
+  	     		  		(match inconsistent with
+  	     		  			  true -> (*print_string ("\tTask " ^ (string_of_int t) ^ " unsat by (placeholder) Formula: " ^ (string_of_int (see_formula_count())) ^ "\n");*)
+			  	     		  			revert_solver_state curr_task.rollback task_stack;
+			  	     		  			pop !glbl_context;
+  	     		  			  			smt_reverse_search graph task_stack
+  	     		  			| false -> (Stack.push 
+											{task_num = t; curr_node_idx = curr_task.curr_node_idx; depth = curr_task.depth;
+											 input_count = curr_task.input_count; placeholder_pred = True; 
+											 rollback = curr_task.rollback+1; var_env = curr_task.var_env} task_stack;
+										smt_reverse_search graph task_stack))))
+	else ((*print_string ("Depth limit reached for task " ^ (string_of_int curr_task.task_num) ^ "\n");*)
+		revert_solver_state curr_task.rollback task_stack;
+		smt_reverse_search graph task_stack)) 
 
 let init_smt_search graph depth start_node_idx =
 	reset_task_count(); 
 	reset_formula_count();
+	reset !glbl_context;
 	let task_stack = Stack.create() in
 	Stack.push {task_num = get_task_count(); 
 		curr_node_idx = start_node_idx; depth = depth; input_count = 0;
 		placeholder_pred = True; rollback = 0; var_env = (Varmap.empty)} task_stack;
-	smt_reverse_search graph  task_stack
+	smt_reverse_search graph task_stack
