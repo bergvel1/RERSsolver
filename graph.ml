@@ -21,7 +21,7 @@ let string_of_edge start_num (end_num, edge_label) =
 let make_node_string node_num node_label shape out_edges =
   (List.fold_left
      (fun s -> fun out_edge -> s^(string_of_edge node_num out_edge))
-     ((string_of_int node_num)^" [label=\""^node_label^"\" shape="^shape^
+     ((string_of_int node_num)^" [label=\""^(string_of_int node_num)^": "^node_label^"\" shape="^shape^
          " ordering=\"out\"];\n")
      out_edges)
 

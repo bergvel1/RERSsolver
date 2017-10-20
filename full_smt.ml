@@ -106,7 +106,7 @@ let rec pred_subst subvar subexps p =
 
 let try_pred pred_exp t = 
 let n = get_formula_count() in
-(*print_string ("Task " ^ (string_of_int t) ^ " Formula " ^ (string_of_int n) ^ ": " ^ (string_of_pred pred_exp) ^ "\n");*)
+(*print_string ("\tTask " ^ (string_of_int t) ^ " Formula " ^ (string_of_int n) ^ ": " ^ (string_of_pred pred_exp) ^ "\n");*)
 let f = (formula_of_pred pred_exp) in
 	assert_simple !glbl_context f;
 	(inconsistent !glbl_context)
@@ -192,8 +192,9 @@ if (Stack.is_empty task_stack) then (print_string "unreachable\n"(*"no more task
 					  	  Assign_node {var;asg_value;node_num;out_node;in_nodes} -> 
 					  	     let lhs = exp_subst (BasicVar "input") [VarExp (BasicVar ("input"^(string_of_int curr_task.input_count)))] (VarExp var) in
 					  	     let rhs = exp_subst (BasicVar "input") [VarExp (BasicVar ("input"^(string_of_int curr_task.input_count)))] (List.hd asg_value) in
-					  	     let (var_env',_) = phi curr_task.var_env lhs in (* this could be done better *)
+					  	     let var_env' = fst (phi curr_task.var_env lhs) in (* this could be done better *)
 					  	     let (var_env'',rhs') = phi_subst_exp var_env' rhs in
+					  	     let var_env_final = if ((Varmap.find (string_of_var var) var_env') = (Varmap.find (string_of_var var) var_env')) then (fst (phi var_env'' lhs)) else var_env'' in
 					  	     let lhs' = snd (phi_subst_exp curr_task.var_env lhs) in
 					  	     let p = Exp_pred (BinOpAppExp (EqOp,lhs',rhs')) in
 					  	     	(if (e = (List.hd (List.rev in_edges))) then 
@@ -201,20 +202,20 @@ if (Stack.is_empty task_stack) then (print_string "unreachable\n"(*"no more task
 					  	     		  	push !glbl_context; 
 					  	     		  	let inconsistent = try_pred p t in
 					  	     		  		(match inconsistent with
-					  	     		  			  true -> (* print_string ("\tTask " ^ (string_of_int t) ^ " unsat by Formula: " ^ (string_of_int (see_formula_count())) ^ "\n"); *)
+					  	     		  			  true -> (*print_string ("\tTask " ^ (string_of_int t) ^ " unsat by Formula: " ^ (string_of_int (see_formula_count())) ^ "\n"); *)
 							  	     		  			revert_solver_state curr_task.rollback task_stack;
 							  	     		  			pop !glbl_context
 					  	     		  			| false -> 
 					  	     		  				(Stack.push 
 														{task_num = t; curr_node_idx = n; depth = curr_task.depth;
 														 input_count = curr_task.input_count; placeholder_pred = True; 
-														 rollback = curr_task.rollback+1; var_env = var_env''} task_stack;)))
+														 rollback = curr_task.rollback+1; var_env = var_env_final} task_stack;)))
 					  	     		else 
 					  	     			(let t = get_task_count() in (Stack.push 
 											{task_num = t; curr_node_idx = n; depth = curr_task.depth;
 											 input_count = curr_task.input_count; placeholder_pred = p; rollback = curr_task.rollback; 
-											 var_env = var_env''} task_stack;)))
-						| Input_node _ -> Stack.push
+											 var_env = var_env_final} task_stack;)))
+						| Input_node _ -> (*print_string ("\t\t INPUT WITH LEN " ^ (string_of_int curr_task.input_count) ^ "\n");*) Stack.push
 							{task_num = if (e = (List.hd (List.rev in_edges))) then (curr_task.task_num) else (get_task_count());
 							 curr_node_idx = n; depth = curr_task.depth-1;
 							 input_count = curr_task.input_count+1; placeholder_pred = True; rollback = curr_task.rollback;
@@ -256,7 +257,7 @@ if (Stack.is_empty task_stack) then (print_string "unreachable\n"(*"no more task
 					  	     		  	push !glbl_context;
 					  	     		  	let inconsistent = try_pred p t in
 					  	     		  		(match inconsistent with
-					  	     		  			  true -> (* print_string ("\tTask " ^ (string_of_int t) ^ " unsat by Formula: " ^ (string_of_int (see_formula_count())) ^ "\n");*)
+					  	     		  			  true -> (*print_string ("\tTask " ^ (string_of_int t) ^ " unsat by Formula: " ^ (string_of_int (see_formula_count())) ^ "\n");*)
 							  	     		  			revert_solver_state curr_task.rollback task_stack;
 							  	     		  			pop !glbl_context
 					  	     		  			| false ->
@@ -275,7 +276,7 @@ if (Stack.is_empty task_stack) then (print_string "unreachable\n"(*"no more task
 						  	  	 curr_node_idx = n; depth = curr_task.depth; input_count = curr_task.input_count;
 						  	  	 placeholder_pred = True; rollback = curr_task.rollback; var_env = curr_task.var_env} 
 						  	  	 task_stack;)) in_edges in smt_reverse_search graph task_stack))
-			| _ -> (*print_string ("Checking placeholder and resuming task " ^ (string_of_int curr_task.task_num) ^ " at node " ^ (string_of_int curr_task.curr_node_idx) ^ "\n"); *)
+			| _ -> (*print_string ("Checking placeholder and resuming task " ^ (string_of_int curr_task.task_num) ^ " at node " ^ (string_of_int curr_task.curr_node_idx) ^ "\n");*)
 					(let t = curr_task.task_num in
 					push !glbl_context;
   	     		  	let inconsistent = try_pred curr_task.placeholder_pred t in
@@ -307,5 +308,7 @@ let init_smt_search graph depth start_node_idx =
 let init_smt_search_all_terminals graph depth =
 	(let terminal_node_idxs = get_terminal_node_idx_list graph in
 	List.iter (fun idx -> 
-		(print_string ("Now searching from error_" ^ (string_of_int (get_crash_val (Array.get graph idx))) ^ "... "); flush_all();
-		init_smt_search graph depth idx; ())) terminal_node_idxs)
+		let errno = (get_crash_val (Array.get graph idx)) in
+		if ((*errno = 50*) true) then
+			(print_string ("Now searching from error_" ^ (string_of_int errno) ^ "... "); flush_all();
+			init_smt_search graph depth idx; ()) else ()) terminal_node_idxs)
