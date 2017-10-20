@@ -21,7 +21,8 @@ let input_alph = get_input_alph graph in
 Printf.printf "Enter a search depth: \n";
 let depth = int_of_string (read_line()) in
 Printf.printf "Running full SMT search... \n";
-time (init_smt_search graph depth) (List.hd terminal_node_idxs);
+(*time (init_smt_search graph depth) (List.nth terminal_node_idxs 3);*)
+time (fun a -> init_smt_search_all_terminals graph depth) ();
 (* Printf.printf "Running partial SMT search... \n";
 time (init_smt_reverse_bfs graph depth) (List.hd terminal_node_idxs);
 Printf.printf "Running substitution BFS search... \n";

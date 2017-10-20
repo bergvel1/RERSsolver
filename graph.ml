@@ -178,6 +178,11 @@ let get_node_number node =
      | Call_node n -> n.node_num
   )
 
+let get_crash_val node =
+  (match node
+    with Terminal_node n -> n.crash_val
+    | _ -> failwith "Not a terminal node")
+
  let get_asg_value node =
    (match node
     with Assign_node n -> n.asg_value

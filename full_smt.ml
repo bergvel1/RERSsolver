@@ -33,8 +33,10 @@ let rec term_of_exp e =
 		| BinOpAppExp (PlusOp,x,y) -> mk_sum !glbl_context (Array.of_list [(term_of_exp x);(term_of_exp y)])
 		| BinOpAppExp (MinusOp,x,y) -> mk_sub !glbl_context (Array.of_list [(term_of_exp x);(term_of_exp y)])
 		| BinOpAppExp (TimesOp,x,y) -> mk_mul !glbl_context (Array.of_list [(term_of_exp x);(term_of_exp y)])
-		(*| BinOpAppExp (DivOp,x,y) -> T.make_arith T.Div (term_of_exp x) (term_of_exp y)*)
 		| TernExp (p,x,y) -> mk_ite !glbl_context (formula_of_pred (Exp_pred p)) (term_of_exp x) (term_of_exp y)
+		| BinOpAppExp (DivOp,x,y) -> failwith "term_of_exp (div)"(*T.make_arith T.Div (term_of_exp x) (term_of_exp y)*)
+		| ConstExp (StringConst _) -> failwith "term_of_exp (StringConst)"
+		| BinOpAppExp (ModOp,x,y) -> failwith "term_of_exp (ModOp)"
 		| _ -> failwith "term_of_exp"
 		)
 
@@ -52,6 +54,8 @@ let rec term_of_exp e =
 		| Exp_pred (BinOpAppExp(LEqOp,x,y)) -> mk_le !glbl_context (term_of_exp x) (term_of_exp y)
 		| Exp_pred (BinOpAppExp(LessOp,x,y)) -> mk_lt !glbl_context (term_of_exp x) (term_of_exp y)
 		| Exp_pred (BinOpAppExp(GEqOp,x,y)) -> mk_ge !glbl_context (term_of_exp y) (term_of_exp x)
+		| Exp_pred (BinOpAppExp(EqOp,BinOpAppExp (ModOp,x,ConstExp y ),ConstExp (IntConst 0))) -> 
+			mk_eq !glbl_context (term_of_exp x) (term_of_exp (BinOpAppExp (TimesOp,ConstExp y, VarExp (BasicVar "unnamed"))))
 		| Exp_pred (BinOpAppExp(EqOp,x,y)) -> mk_eq !glbl_context (term_of_exp x) (term_of_exp y)
 		| Exp_pred (BinOpAppExp(NEqOp,x,y)) -> mk_diseq !glbl_context (term_of_exp x) (term_of_exp y)
 		| Exp_pred (BinOpAppExp(AndOp,x,y)) -> mk_and !glbl_context (Array.of_list [(formula_of_pred (Exp_pred x));(formula_of_pred (Exp_pred y))])
@@ -120,6 +124,12 @@ let phi var_env e =
 	  let vstr' = String.concat "" [vstr;app] in (var_env',VarExp (BasicVar vstr')))
 | _ -> failwith "Bad input (phi)")
 
+(* find the current name for a variable (without incrementing its count in var_env) *)
+let get_phi_name var_env vstr =
+  let count = (try (Varmap.find vstr var_env) with Not_found -> failwith "Bad lookup (get_phi_name)") in
+  let app = ("\'" ^ (string_of_int count)) in
+  String.concat "" [vstr;app]
+
 (* replace variables in e with their proper phi versions *)
 let rec phi_subst_exp var_env exp = (match exp with 
   VarExp v -> let vstr = (string_of_var v) in 
@@ -150,8 +160,19 @@ if (not (Stack.is_empty task_stack))
 				(pop !glbl_context)
 		done)
 
+let print_inputs var_env len = 
+	let model = (get_model !glbl_context) in
+	for i = 0 to (len-1) do 
+		let input_name = ("input" ^ (string_of_int i)) in
+		let input_phi = get_phi_name var_env input_name in
+		let input_decl = get_var_decl_from_name !glbl_context input_phi in
+		let input_val = get_int_value model input_decl in
+			print_string ("\t" ^ input_name ^ " = " ^ 
+				(String.make 1 (char_of_int (64+(Int32.to_int input_val)))) ^ "\n") (* char_of_int 65 = 'A' *)
+	done
+
 let rec smt_reverse_search graph task_stack =
-if (Stack.is_empty task_stack) then (print_string "no more tasks\n"; []) else
+if (Stack.is_empty task_stack) then (print_string "unreachable\n"(*"no more tasks\n"*); flush stdout; []) else
 	(let curr_task = Stack.pop task_stack in
 	if (curr_task.depth > -1) then
 		(match curr_task.placeholder_pred with
@@ -160,10 +181,11 @@ if (Stack.is_empty task_stack) then (print_string "no more tasks\n"; []) else
 				(match (get_in_nodes curr_node) with
 				  [] -> (*print_string "\t\t Found valid path to start! \n";*)
 				  		(match (check !glbl_context) with
-				  			  True -> display_model (get_model !glbl_context)
+				  			  True -> print_string "Reachable!\n"; (*display_model (get_model !glbl_context); flush stdout*) print_inputs curr_task.var_env curr_task.input_count
 				  			| _ -> failwith "Bad sat check (this should not happen!)"); 
-					  	revert_solver_state curr_task.rollback task_stack;
-				  		smt_reverse_search graph task_stack
+					  	(*revert_solver_state curr_task.rollback task_stack;
+					  	smt_reverse_search graph task_stack;*)
+					  	Stack.clear task_stack; [] (* switch this for the previous two lines to keep searching after having found a valid path *)
 				| in_edges -> 
 					let _ = List.map (fun e -> (match e with
 					  (n,Seq) -> (match (Array.get graph n) with
@@ -280,3 +302,10 @@ let init_smt_search graph depth start_node_idx =
 		curr_node_idx = start_node_idx; depth = depth; input_count = 0;
 		placeholder_pred = True; rollback = 0; var_env = (Varmap.empty)} task_stack;
 	smt_reverse_search graph task_stack
+
+
+let init_smt_search_all_terminals graph depth =
+	(let terminal_node_idxs = get_terminal_node_idx_list graph in
+	List.iter (fun idx -> 
+		(print_string ("Now searching from error_" ^ (string_of_int (get_crash_val (Array.get graph idx))) ^ "... "); flush_all();
+		init_smt_search graph depth idx; ())) terminal_node_idxs)
