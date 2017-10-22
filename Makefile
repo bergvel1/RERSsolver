@@ -2,8 +2,8 @@ SOURCES = abs_syn.ml parse.mly tokens.ml lex.mll eval_exp.ml graph.ml solverintf
 
 EXEC = main
 
-CAMLC = ocamlfind ocamlc -cc=gcc-7 -I +alt-ergo-zero unix.cma nums.cma aez.cma -package ocamlyices -linkpkg
-CAMLOPT = ocamlfind ocamlopt -cc=gcc-7 -I +alt-ergo-zero unix.cmxa aez.cmxa -package ocamlyices -linkpkg
+CAMLC = ocamlfind ocamlc -cc=gcc-7 -I +alt-ergo-zero nums.cma aez.cma -package ocamlyices -linkpkg -package parmap -linkpkg
+CAMLOPT = ocamlfind ocamlopt -cc=gcc-7 -I +alt-ergo-zero aez.cmxa -package ocamlyices -linkpkg -package parmap -linkpkg
 CAMLDEP = ocamldep
 CAMLLEX = ocamllex
 CAMLYACC = ocamlyacc

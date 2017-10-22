@@ -307,8 +307,13 @@ let init_smt_search graph depth start_node_idx =
 
 let init_smt_search_all_terminals graph depth =
 	(let terminal_node_idxs = get_terminal_node_idx_list graph in
-	List.iter (fun idx -> 
+	(*List.iter (fun idx -> 
 		let errno = (get_crash_val (Array.get graph idx)) in
-		if ((*errno = 50*) true) then
+		if  true then
 			(print_string ("Now searching from error_" ^ (string_of_int errno) ^ "... "); flush_all();
-			init_smt_search graph depth idx; ()) else ()) terminal_node_idxs)
+			init_smt_search graph depth idx; ()) else ()) terminal_node_idxs)*)
+	Parmap.pariter ~ncores:2 (fun idx -> 
+		let errno = (get_crash_val (Array.get graph idx)) in
+		if  true then
+			(print_string ("Now searching from error_" ^ (string_of_int errno) ^ "... "); flush_all();
+			init_smt_search graph depth idx; ()) else ()) (Parmap.L terminal_node_idxs))
