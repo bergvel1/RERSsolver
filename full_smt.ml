@@ -65,6 +65,15 @@ let (get_mod_count, see_mod_count, reset_mod_count) =
 
 let get_mod_name = (fun () -> ("mod" ^ (string_of_int (get_mod_count()))))
 
+let (get_unnamed_count, see_unnamed_count, reset_unnamed_count) =
+  let count = ref 1 in
+  ((fun () -> (let c = !count in (count := c + 1; c))),
+   (fun () -> (!count)),
+   (fun () -> count := 1))
+
+(* ...not the best thing to call this function *)
+let get_unnamed_name = (fun () -> ("unnamed" ^ (string_of_int (get_unnamed_count()))))
+
 let rec term_of_exp e =
 		(match e with
 		  VarExp v -> let v_decl = try 
@@ -80,22 +89,29 @@ let rec term_of_exp e =
 		| BinOpAppExp (TimesOp,x,y) -> mk_mul !glbl_context (Array.of_list [(term_of_exp x);(term_of_exp y)])
 		| TernExp (p,x,y) -> mk_ite !glbl_context (formula_of_pred (Exp_pred p)) (term_of_exp x) (term_of_exp y)
 			(* "special" operations (i.e. not natively supported by OCamlyices *)
-		| BinOpAppExp (DivOp,i,j) -> let ctx = !glbl_context in 
+		| BinOpAppExp (DivOp,i,(ConstExp (IntConst j))) ->
+			let ctx = !glbl_context in 
 			let quot_term = term_of_exp (VarExp (BasicVar (get_quot_name()))) in
 			let rem_term = term_of_exp (VarExp (BasicVar (get_rem_name()))) in
 			let i_term = term_of_exp i in
-			let j_term = term_of_exp j in
-				(* ((q * j) + r = i) && (r * i >= 0) *)
-			mk_and ctx (Array.of_list [(mk_eq ctx (mk_sum ctx (Array.of_list [(mk_mul ctx (Array.of_list [quot_term;j_term]));rem_term])) i_term);(mk_ge ctx (mk_mul ctx (Array.of_list [rem_term;i_term])) (mk_num ctx 0))])
-		| BinOpAppExp (ModOp,i,j) -> let ctx = !glbl_context in
+			let j_term = mk_num ctx j in
+			let zero_term = mk_num ctx 0 in
+				(* ((q * j) + r = i) && (((i >= 0) && (r >= 0)) || ((i <= 0) && (r <= 0))) *)
+			let exp = mk_and ctx (Array.of_list [(mk_eq ctx (mk_sum ctx (Array.of_list [(mk_mul ctx (Array.of_list [quot_term;j_term]));rem_term])) i_term);(mk_or ctx (Array.of_list [(mk_and ctx (Array.of_list [(mk_ge ctx i_term zero_term);(mk_ge ctx rem_term zero_term)]));(mk_and ctx (Array.of_list [(mk_le ctx i_term zero_term);(mk_le ctx rem_term zero_term)]))]))]) in
+			(*pp_expr exp;*) exp
+		| BinOpAppExp (ModOp,i,(ConstExp (IntConst j))) -> 
+			let ctx = !glbl_context in
 			let div_term = term_of_exp (VarExp (BasicVar (get_div_name()))) in
 			let mod_term = term_of_exp (VarExp (BasicVar (get_mod_name()))) in
 			let i_term = term_of_exp i in
-			let j_term = term_of_exp j in
-				(* ((d * j) + m = i) && (m * j >= 0) *)
-			mk_and ctx (Array.of_list [(mk_eq ctx (mk_sum ctx (Array.of_list [(mk_mul ctx (Array.of_list [div_term;j_term]));mod_term])) i_term);(mk_ge ctx (mk_mul ctx (Array.of_list [mod_term;j_term])) (mk_num ctx 0))])
-		| ConstExp (StringConst _) -> failwith "term_of_exp (StringConst)"
-		| _ -> failwith "term_of_exp"
+			let j_term = mk_num ctx j in
+			let zero_term = mk_num ctx 0 in
+				(* ((d * j) + m = i) && (((j >= 0) && (m >= 0)) || ((j <= 0) && (m <= 0))) *)
+			let exp = mk_and ctx (Array.of_list [(mk_eq ctx (mk_sum ctx (Array.of_list [(mk_mul ctx (Array.of_list [div_term;j_term]));mod_term])) i_term);(mk_or ctx (Array.of_list [(mk_and ctx (Array.of_list [(mk_ge ctx j_term zero_term);(mk_ge ctx mod_term zero_term)]));(mk_and ctx (Array.of_list [(mk_le ctx j_term zero_term);(mk_le ctx mod_term zero_term)]))]))]) in
+			(*pp_expr exp;*) exp
+		| BinOpAppExp (DivOp,i,j) -> failwith "term_of_exp error (nonlinear division operation)"
+		| BinOpAppExp (ModOp,i,j) -> failwith "term_of_exp error (nonlinear modulo operation)"
+		| _ -> failwith "term_of_exp error (other)"
 		)
 
 		and formula_of_pred p =
@@ -112,16 +128,17 @@ let rec term_of_exp e =
 		| Exp_pred (BinOpAppExp(LEqOp,x,y)) -> mk_le !glbl_context (term_of_exp x) (term_of_exp y)
 		| Exp_pred (BinOpAppExp(LessOp,x,y)) -> mk_lt !glbl_context (term_of_exp x) (term_of_exp y)
 		| Exp_pred (BinOpAppExp(GEqOp,x,y)) -> mk_ge !glbl_context (term_of_exp y) (term_of_exp x)
+			(* a special case of the modulo operation that is easily solved by Yices *)
+		| Exp_pred (BinOpAppExp(EqOp,BinOpAppExp (ModOp,x,ConstExp y ),ConstExp (IntConst 0))) -> 
+			mk_eq !glbl_context (term_of_exp x) (term_of_exp (BinOpAppExp (TimesOp,ConstExp y, VarExp (BasicVar (get_unnamed_name())))))
 		| Exp_pred (BinOpAppExp(EqOp,x,y)) -> mk_eq !glbl_context (term_of_exp x) (term_of_exp y)
 		| Exp_pred (BinOpAppExp(NEqOp,x,y)) -> mk_diseq !glbl_context (term_of_exp x) (term_of_exp y)
 		| Exp_pred (BinOpAppExp(AndOp,x,y)) -> mk_and !glbl_context (Array.of_list [(formula_of_pred (Exp_pred x));(formula_of_pred (Exp_pred y))])
 		| Exp_pred (BinOpAppExp(OrOp,x,y)) -> mk_or !glbl_context (Array.of_list [(formula_of_pred (Exp_pred x));(formula_of_pred (Exp_pred y))])
-		| Exp_pred (MonOpAppExp(BoolNegOp,x)) -> mk_not !glbl_context (formula_of_pred (Exp_pred x))	
+		| Exp_pred (MonOpAppExp(BoolNegOp,x)) -> mk_not !glbl_context (formula_of_pred (Exp_pred x))
 		| Exp_pred (BinOpAppExp(DivOp,i,j)) -> term_of_exp (BinOpAppExp(DivOp,i,j))
 		| Exp_pred (BinOpAppExp (ModOp,i,j)) -> term_of_exp (BinOpAppExp (ModOp,i,j))
-		(*| Exp_pred (BinOpAppExp(EqOp,BinOpAppExp (ModOp,x,ConstExp y ),ConstExp (IntConst 0))) -> 
-			mk_eq !glbl_context (term_of_exp x) (term_of_exp (BinOpAppExp (TimesOp,ConstExp y, VarExp (BasicVar "unnamed"))))*) (* TODO: make fresh unnamed *)
-		| _ -> failwith "formula_of_pred"
+		| _ -> failwith "formula_of_pred error"
 		)
 
 let rec exp_subst subvar subexps exp = 
@@ -153,7 +170,7 @@ let rec pred_subst subvar subexps p =
 
 let try_pred pred_exp t = 
 let n = get_formula_count() in
-(*print_string ("\tTask " ^ (string_of_int t) ^ " Formula " ^ (string_of_int n) ^ ": " ^ (string_of_pred pred_exp) ^ "\n");*)
+(*print_string ("\tTask " ^ (string_of_int t) ^ " Formula " ^ (string_of_int n) ^ ": " ^ (string_of_pred pred_exp) ^ "\n"); flush_all();*)
 let f = (formula_of_pred pred_exp) in
 	assert_simple !glbl_context f;
 	(inconsistent !glbl_context)
@@ -347,6 +364,8 @@ let init_smt_search graph depth start_node_idx =
 	reset_quot_count();
 	reset_rem_count();
 	reset_div_count();
+	reset_mod_count();
+	reset_unnamed_count();
 	reset !glbl_context;
 	let task_stack = Stack.create() in
 	Stack.push {task_num = get_task_count(); 
@@ -364,6 +383,6 @@ let init_smt_search_all_terminals graph depth =
 			init_smt_search graph depth idx; ()) else ()) terminal_node_idxs)*)
 	Parmap.pariter ~ncores:2 (fun idx -> 
 		let errno = (get_crash_val (Array.get graph idx)) in
-		if  true then
+		if true then
 			(print_string ("Now searching from error_" ^ (string_of_int errno) ^ "... "); flush_all();
 			init_smt_search graph depth idx; ()) else ()) (Parmap.L terminal_node_idxs))
