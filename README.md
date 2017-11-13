@@ -2,6 +2,8 @@
 
 This project is an experiment in code reachability analysis, built to run on the [Rigorous Examination of Reactive Systems (RERS)](http://www.rers-challenge.org/) sequential reachability problems. By using a [weakest-precondition](https://en.wikipedia.org/wiki/Predicate_transformer_semantics#Weakest_preconditions) search over the control flow graph of a sequential C program, we are able to determine code reachability by calculating if at least one valid path exists from some code fragment back to the head of the control flow graph. From initial performance testing, this search method appears to offer time and space complexities that are comparable to or even superior to those of some existing reachability analysis methods, such as symbolic execution and fuzzing.
 
+A detailed technical writeup may be found [here](writeup.pdf).
+
 ## Getting Started
 
 This project was developed and tested on Mac OS X El Capitan, but it should also work on Linux. For use with OCaml 4.04.0.
